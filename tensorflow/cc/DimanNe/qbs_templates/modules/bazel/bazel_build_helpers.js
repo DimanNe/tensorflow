@@ -1,13 +1,13 @@
-var File = require("qbs.File");
 var FileInfo = require("qbs.FileInfo");
 var TextFile = require("qbs.TextFile");
+var File = require("qbs.File");
 
 function getTensorFlowRoot(srcDir) {
-    for(var path = srcDir; path != "/"; path = FileInfo.path(path)) {
-        if(File.exists(path + "/.git"))
-            return path
-    }
-    throw "Can not find tensorflow root (.git folder) from " + srcDir
+   for(var path = srcDir; path != "/"; path = FileInfo.path(path)) {
+       if(File.exists(path + "/.git"))
+           return path
+   }
+   throw "Can not find tensorflow root (.git folder) from " + srcDir
 }
 
 function getRelativePath(fullPath) {
@@ -20,6 +20,12 @@ function getBazelProjectName(fullPath) {
     var result = relativePath + ":" + FileInfo.fileName(relativePath);
     return result;
 }
+
+
+
+
+
+
 
 // function generateBUILDFile(tfSrcs, tfDeps, projectName, directory) {
 //     var file = new TextFile(directory + "/BUILD", TextFile.WriteOnly);
