@@ -18,17 +18,26 @@ int main() {
    //   Output init = ops::Assign(s.WithOpName("init"), v, x);
 
 
-   tf::Scope r     = tf::Scope::NewRootScope();
-   tf::Scope Root  = r.ExitOnError();
-   auto      x     = to::Placeholder(Root, tf::DT_DOUBLE);
-   auto      W     = to::RandomUniform(Root, 10, tf::DT_DOUBLE);
-   auto      b     = to::RandomUniform(Root, 10, tf::DT_DOUBLE);
-   auto      Model = to::Sum(Root, b, to::MatMul(Root, W, x, to::MatMul::TransposeB(true)));
+   tf::Scope r = tf::Scope::NewRootScope();
+   tf::Scope s = r.ExitOnError();
+   auto RandW     = to::RandomUniform(s, {10}, tf::DT_DOUBLE);
+   auto W         = to::Variable(s, {10}, tf::DT_DOUBLE);
+   auto AssignToW = to::Assign(s, W, RandW);
 
-   std::vector<tf::Tensor> Outputs;
-   tf::ClientSession       Session(Root);
-   TF_CHECK_OK(Session.Run({Model}, &Outputs));
-   LOG(INFO) << Outputs[0].matrix<double>();
+   std::vector<tf::Tensor> OutputsOfAssigning;
+   tf::ClientSession       SessionForAssigning(s);
+   TF_CHECK_OK(SessionForAssigning.Run({AssignToW}, &OutputsOfAssigning));
+   LOG(INFO) << OutputsOfAssigning[0].vec<double>();
+
+
+   // auto      x = to::Placeholder(s, tf::DT_DOUBLE);
+
+   // auto      b     = to::RandomUniform(Root, 10, tf::DT_DOUBLE);
+   // auto Model = to::Sum(s, b, to::MatMul(s, W, x, to::MatMul::TransposeB(true)));
+   // std::vector<tf::Tensor> Outputs;
+   // tf::ClientSession       Session(s);
+   // TF_CHECK_OK(Session.Run({Model}, &Outputs));
+   // LOG(INFO) << Outputs[0].matrix<double>();
 
    return 0;
 
