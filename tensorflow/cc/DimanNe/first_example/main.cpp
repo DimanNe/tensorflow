@@ -6,38 +6,39 @@ namespace tf = tensorflow;
 namespace to = tf::ops;
 
 int main() {
-
-   // TEST_F(SingleMachineTest, InitializationMemory) {
-   //   // Build a variable and its initialization graph.
-   //   tensorflow::Scope s = tensorflow::Scope::NewRootScope();
-   //   int batch_size = 10;
-   //   Output x =
-   //       ops::RandomNormal(s.WithOpName("x"), {batch_size, 1}, DataType::DT_FLOAT);
-   //   Output v = ops::Variable(s.WithOpName("v"), TensorShape({batch_size, 1}),
-   //                            DataType::DT_FLOAT);
-   //   Output init = ops::Assign(s.WithOpName("init"), v, x);
+   tf::Scope         r = tf::Scope::NewRootScope();
+   tf::Scope         s = r.ExitOnError();
+   tf::ClientSession Session(s);
 
 
-   tf::Scope r = tf::Scope::NewRootScope();
-   tf::Scope s = r.ExitOnError();
-   auto RandW     = to::RandomUniform(s, {10}, tf::DT_DOUBLE);
-   auto W         = to::Variable(s, {10}, tf::DT_DOUBLE);
-   auto AssignToW = to::Assign(s, W, RandW);
+   tf::Output RandW     = to::RandomUniform(s, {10, 1}, tf::DT_DOUBLE);
+   tf::Output W = to::Variable(s.WithOpName("W"), {10, 1}, tf::DT_DOUBLE);
+   tf::Output AssignToW = to::Assign(s, W, RandW);
 
-   std::vector<tf::Tensor> OutputsOfAssigning;
-   tf::ClientSession       SessionForAssigning(s);
-   TF_CHECK_OK(SessionForAssigning.Run({AssignToW}, &OutputsOfAssigning));
-   LOG(INFO) << OutputsOfAssigning[0].vec<double>();
+   tf::Output RandB     = to::RandomUniform(s, {10, 1}, tf::DT_DOUBLE);
+   tf::Output b = to::Variable(s.WithOpName("b"), {10, 1}, tf::DT_DOUBLE);
+   tf::Output AssignToB = to::Assign(s, b, RandB);
+
+   {
+      std::vector<tf::Tensor> OutputsOfAssigning;
+      TF_CHECK_OK(Session.Run({AssignToW}, &OutputsOfAssigning));
+      LOG(INFO) << OutputsOfAssigning[0].matrix<double>();
+   }
+
+   {
+      std::vector<tf::Tensor> OutputsOfAssigning;
+      TF_CHECK_OK(Session.Run({AssignToB}, &OutputsOfAssigning));
+      LOG(INFO) << OutputsOfAssigning[0].matrix<double>();
+   }
 
 
-   // auto      x = to::Placeholder(s, tf::DT_DOUBLE);
+   tf::Output x     = to::Placeholder(s.WithOpName("xInput"), tf::DT_DOUBLE);
+   tf::Output Wx    = to::MatMul(s.WithOpName("Wx"), W, x, to::MatMul::TransposeB(true));
+   tf::Output Model = to::AddN(s.WithOpName("Wxb"), {b, Wx});
 
-   // auto      b     = to::RandomUniform(Root, 10, tf::DT_DOUBLE);
-   // auto Model = to::Sum(s, b, to::MatMul(s, W, x, to::MatMul::TransposeB(true)));
-   // std::vector<tf::Tensor> Outputs;
-   // tf::ClientSession       Session(s);
-   // TF_CHECK_OK(Session.Run({Model}, &Outputs));
-   // LOG(INFO) << Outputs[0].matrix<double>();
+   std::vector<tf::Tensor> Outputs;
+   TF_CHECK_OK(Session.Run({{x, {{1., 2., 3., 4., 5., 6., 7., 8., 9., 0.}, {}}}}, {Model}, &Outputs));
+   LOG(INFO) << Outputs[0].matrix<double>();
 
    return 0;
 
