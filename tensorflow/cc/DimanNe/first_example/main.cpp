@@ -6,6 +6,18 @@ namespace tf = tensorflow;
 namespace to = tf::ops;
 
 int main() {
+
+   // TEST_F(SingleMachineTest, InitializationMemory) {
+   //   // Build a variable and its initialization graph.
+   //   tensorflow::Scope s = tensorflow::Scope::NewRootScope();
+   //   int batch_size = 10;
+   //   Output x =
+   //       ops::RandomNormal(s.WithOpName("x"), {batch_size, 1}, DataType::DT_FLOAT);
+   //   Output v = ops::Variable(s.WithOpName("v"), TensorShape({batch_size, 1}),
+   //                            DataType::DT_FLOAT);
+   //   Output init = ops::Assign(s.WithOpName("init"), v, x);
+
+
    tf::Scope r     = tf::Scope::NewRootScope();
    tf::Scope Root  = r.ExitOnError();
    auto      x     = to::Placeholder(Root, tf::DT_DOUBLE);
