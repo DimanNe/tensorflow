@@ -119,11 +119,13 @@ Module {
 
             var tensorFlowRoot = bbh.getTensorFlowRoot(product.sourceDirectory)
             var bazelProjectName = bbh.getBazelProjectName(product.sourceDirectory);
+            // bazel run -c opt --copt=-mavx --copt=-msse4.2
             var cmd = new Command("bazel", [
-                                       "run",
+                                       "build",
                                        "-c",
                                        "opt",
                                        "--copt=-mavx",
+                                      "--copt=-g",
                                        // "--copt=-mavx2",
                                        //"--copt=-mfma",
                                        //"--copt=-mfpmath=both",
