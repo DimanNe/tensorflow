@@ -11,12 +11,12 @@ int main() {
    tf::ClientSession Session(s);
 
 
-   tf::Output RandW     = to::RandomUniform(s, {10, 1}, tf::DT_DOUBLE);
-   tf::Output W = to::Variable(s.WithOpName("W"), {10, 1}, tf::DT_DOUBLE);
+   tf::Output RandW     = to::RandomUniform(s, {1, 10}, tf::DT_DOUBLE);
+   tf::Output W         = to::Variable(s.WithOpName("W"), {1, 10}, tf::DataTypeToEnum<double>::v());
    tf::Output AssignToW = to::Assign(s, W, RandW);
 
-   tf::Output RandB     = to::RandomUniform(s, {10, 1}, tf::DT_DOUBLE);
-   tf::Output b = to::Variable(s.WithOpName("b"), {10, 1}, tf::DT_DOUBLE);
+   tf::Output RandB     = to::RandomUniform(s, {1}, tf::DT_DOUBLE);
+   tf::Output b         = to::Variable(s.WithOpName("b"), {1}, tf::DataTypeToEnum<double>::v());
    tf::Output AssignToB = to::Assign(s, b, RandB);
 
    {
@@ -28,16 +28,19 @@ int main() {
    {
       std::vector<tf::Tensor> OutputsOfAssigning;
       TF_CHECK_OK(Session.Run({AssignToB}, &OutputsOfAssigning));
-      LOG(INFO) << OutputsOfAssigning[0].matrix<double>();
+      LOG(INFO) << OutputsOfAssigning[0].vec<double>();
    }
 
 
-   tf::Output x     = to::Placeholder(s.WithOpName("xInput"), tf::DT_DOUBLE);
+   tf::Output x     = to::Placeholder(s.WithOpName("xInput"), tf::DataTypeToEnum<double>::v());
    tf::Output Wx    = to::MatMul(s.WithOpName("Wx"), W, x, to::MatMul::TransposeB(true));
    tf::Output Model = to::AddN(s.WithOpName("Wxb"), {b, Wx});
 
    std::vector<tf::Tensor> Outputs;
-   TF_CHECK_OK(Session.Run({{x, {{1., 2., 3., 4., 5., 6., 7., 8., 9., 0.}, {}}}}, {Model}, &Outputs));
+   tf::ClientSession::FeedType Feed = {
+      {  x, {{1., 2., 3., 4., 5., 6., 7., 8., 9., 0.}} } // 10x1 matrix
+   };
+   TF_CHECK_OK(Session.Run(Feed, {Model}, &Outputs));
    LOG(INFO) << Outputs[0].matrix<double>();
 
    return 0;

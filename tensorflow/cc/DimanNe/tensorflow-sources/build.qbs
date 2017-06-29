@@ -6,7 +6,9 @@ Product {
     Depends { name: "bazel" }
 
     // The list below is generated with:
-    // /home/Void/devel/tensorflow/tensorflow$ find core | grep "\.cc$\|\.proto$\|\.h$" | xargs -I {} echo "\"../../../{}\""
+    // /home/Void/devel/tensorflow/tensorflow$ find core | grep "\.cc$\|\.proto$\|\.h$" | xargs -I {} echo "\"../../../{}\","
+    // and
+    // /home/Void/devel/tensorflow/tensorflow/cc$ find framework/ | grep "\.cc$\|\.proto$\|\.h$" | xargs -I {} echo "\"../../{}\","
 
     files: [
         "../../../core/lib/gif/gif_io.cc",
@@ -1900,6 +1902,28 @@ Product {
         "../../../core/util/guarded_philox_random.h",
         "../../../core/public/version.h",
         "../../../core/public/session_options.h",
-        "../../../core/public/session.h"
+        "../../../core/public/session.h",
+
+        "../../framework/grad_op_registry.h",
+        "../../framework/scope_internal.h",
+        "../../framework/gradient_checker.h",
+        "../../framework/cc_ops_test.cc",
+        "../../framework/gradient_checker_test.cc",
+        "../../framework/testutil.h",
+        "../../framework/ops.cc",
+        "../../framework/scope.h",
+        "../../framework/scope.cc",
+        "../../framework/gradients_test.cc",
+        "../../framework/scope_test.cc",
+        "../../framework/gradients.cc",
+        "../../framework/gradients.h",
+        "../../framework/testutil.cc",
+        "../../framework/ops.h",
+        "../../framework/gradient_checker.cc",
+        "../../framework/grad_op_registry.cc",
+        "../../framework/test_op.cc",
+        "../../framework/cc_op_gen_main.cc",
+        "../../framework/cc_op_gen.cc",
+        "../../framework/cc_op_gen.h"
     ]
 }
