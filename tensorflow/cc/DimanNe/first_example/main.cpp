@@ -15,8 +15,8 @@ int main() {
    tf::Output W         = to::Variable(s.WithOpName("W"), {1, 10}, tf::DataTypeToEnum<double>::v());
    tf::Output AssignToW = to::Assign(s, W, RandW);
 
-   tf::Output RandB     = to::RandomUniform(s, {1}, tf::DT_DOUBLE);
-   tf::Output b         = to::Variable(s.WithOpName("b"), {1}, tf::DataTypeToEnum<double>::v());
+   tf::Output RandB     = to::RandomUniform(s, {1, 1}, tf::DT_DOUBLE);
+   tf::Output b         = to::Variable(s.WithOpName("b"), {1, 1}, tf::DataTypeToEnum<double>::v());
    tf::Output AssignToB = to::Assign(s, b, RandB);
 
    {
@@ -28,7 +28,7 @@ int main() {
    {
       std::vector<tf::Tensor> OutputsOfAssigning;
       TF_CHECK_OK(Session.Run({AssignToB}, &OutputsOfAssigning));
-      LOG(INFO) << OutputsOfAssigning[0].vec<double>();
+      LOG(INFO) << OutputsOfAssigning[0].matrix<double>();
    }
 
 
