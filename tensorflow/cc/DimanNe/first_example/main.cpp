@@ -45,7 +45,7 @@ namespace tfu {
             for(const tensorflow::ops::Assign &Assign : Assigns) {
                 std::vector<tf::Tensor> OutputsOfAssigning;
                 TF_CHECK_OK(Session.Run({Assign}, &OutputsOfAssigning));
-                // LOG(INFO) << OutputsOfAssigning[0].DebugString();
+                LOG(INFO) << OutputsOfAssigning[0].DebugString();
                 // LOG(INFO) << OutputsOfAssigning[0].matrix<double>();
                 // LOG(INFO) << OutputsOfAssigning[0].vec<double>();
             }
@@ -59,44 +59,24 @@ namespace tfu {
 int main() {
     tf::Scope                 r = tf::Scope::NewRootScope();
     tf::Scope                 s = r.ExitOnError();
-    tf::ClientSession         Session(s);
-    tfu::TVariableInitializer InitVars;
+    tfu::TVariableInitializer InitV;
 
-    tf::Output W = InitVars.Create<to::RandomUniform>(s.WithOpName("W"), {1, 10}, tf::DT_DOUBLE, {}, tf::DT_DOUBLE);
-    tf::Output b = InitVars.Create<to::RandomUniform>(s.WithOpName("b"), {1, 1}, tf::DT_DOUBLE, {}, tf::DT_DOUBLE);
-
-
-
-    // tf::Output RandW     = to::RandomUniform(s, {1, 10}, tf::DT_DOUBLE);
-    // tf::Output W         = to::Variable(s.WithOpName("W"), {1, 10}, tf::DataTypeToEnum<double>::v());
-    // tf::Output AssignToW = to::Assign(s, W, RandW);
-
-    // tf::Output RandB     = to::RandomUniform(s, {1, 1}, tf::DT_DOUBLE);
-    // tf::Output b         = to::Variable(s.WithOpName("b"), {1, 1}, tf::DataTypeToEnum<double>::v());
-    // tf::Output AssignToB = to::Assign(s, b, RandB);
-
-    InitVars(Session);
-    // {
-    //     std::vector<tf::Tensor> OutputsOfAssigning;
-    //     TF_CHECK_OK(Session.Run({AssignToW}, &OutputsOfAssigning));
-    //     LOG(INFO) << OutputsOfAssigning[0].matrix<double>();
-    // }
-
-    // {
-    //     std::vector<tf::Tensor> OutputsOfAssigning;
-    //     TF_CHECK_OK(Session.Run({AssignToB}, &OutputsOfAssigning));
-    //     LOG(INFO) << OutputsOfAssigning[0].matrix<double>();
-    // }
-
+    tf::Output W = InitV.Create<to::RandomUniform>(s.WithOpName("W"), {1, 10}, tf::DT_DOUBLE, {}, tf::DT_DOUBLE);
+    tf::Output b =
+        InitV.Create<to::ParameterizedTruncatedNormal>(s.WithOpName("b"), {1, 1}, tf::DT_DOUBLE, {}, 10., 1., 0., 20.);
 
     tf::Output x     = to::Placeholder(s.WithOpName("xInput"), tf::DataTypeToEnum<double>::v());
     tf::Output Wx    = to::MatMul(s.WithOpName("Wx"), W, x, to::MatMul::TransposeB(true));
     tf::Output Model = to::AddN(s.WithOpName("Wxb"), {b, Wx});
 
+
+
     std::vector<tf::Tensor>     Outputs;
     tf::ClientSession::FeedType Feed = {
         {x, {{1., 2., 3., 4., 5., 6., 7., 8., 9., 0.}}} // 10x1 matrix
     };
+    tf::ClientSession Session(s);
+    InitV(Session);
     TF_CHECK_OK(Session.Run(Feed, {Model}, &Outputs));
     LOG(INFO) << Outputs[0].matrix<double>();
 
