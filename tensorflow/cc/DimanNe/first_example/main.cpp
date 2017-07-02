@@ -2,59 +2,12 @@
 #include "tensorflow/cc/ops/standard_ops.h"
 #include "tensorflow/core/framework/tensor.h"
 
-#include "tensorflow/core/lib/gtl/array_slice.h"
+#include "tensorflow/cc/DimanNe/tensorflow_utils/variable_initializer.h"
 
 
 namespace tf = tensorflow;
 namespace to = tf::ops;
 
-namespace tfu {
-
-    tensorflow::Input InputFromTensorShape(const tensorflow::TensorShape &Shape) {
-        tf::Tensor Tensor(tf::DT_INT64, {Shape.dims()});
-        tf::int16  i = 0;
-        for(const tf::TensorShapeDim Dimenstion : Shape) {
-            Tensor.flat<tf::int64>()(i) = Dimenstion.size;
-            // LOG(INFO) << "Assigning to ith: " << i << " element in tensor value: " << Dimenstion.size;
-            ++i;
-        }
-        tensorflow::Input Result(Tensor);
-        return Result;
-    }
-
-    class TVariableInitializer {
-    public:
-        template <class TDistr, class... TDistrArgs>
-        tensorflow::ops::Variable Create(const tensorflow::Scope &               Scope,
-                                         const tensorflow::TensorShape &         Shape,
-                                         const tensorflow::DataType              Dtype,
-                                         const tensorflow::ops::Variable::Attrs &VarAttrs,
-                                         TDistrArgs &&... DistrArgs) {
-            namespace tf = tensorflow;
-            namespace to = tf::ops;
-
-            const tf::Input ShapeAsInput = InputFromTensorShape(Shape);
-            TDistr          Distribution = TDistr(Scope, ShapeAsInput, std::forward<TDistrArgs>(DistrArgs)...);
-            to::Variable    Variable     = {Scope, Shape, Dtype, VarAttrs};
-            to::Assign      Assign       = to::Assign(Scope, Variable, Distribution);
-            Assigns.push_back(Assign);
-            return Variable;
-        }
-
-        void operator()(tensorflow::ClientSession &Session) const {
-            for(const tensorflow::ops::Assign &Assign : Assigns) {
-                std::vector<tf::Tensor> OutputsOfAssigning;
-                TF_CHECK_OK(Session.Run({Assign}, &OutputsOfAssigning));
-                LOG(INFO) << OutputsOfAssigning[0].DebugString();
-                // LOG(INFO) << OutputsOfAssigning[0].matrix<double>();
-                // LOG(INFO) << OutputsOfAssigning[0].vec<double>();
-            }
-        }
-
-    private:
-        std::vector<tensorflow::ops::Assign> Assigns;
-    };
-}
 
 int main() {
     tf::Scope                 r = tf::Scope::NewRootScope();
@@ -70,7 +23,6 @@ int main() {
     tf::Output Model = to::AddN(s.WithOpName("Wxb"), {b, Wx});
 
 
-
     std::vector<tf::Tensor>     Outputs;
     tf::ClientSession::FeedType Feed = {
         {x, {{1., 2., 3., 4., 5., 6., 7., 8., 9., 0.}}} // 10x1 matrix
@@ -82,3 +34,37 @@ int main() {
 
     return 0;
 }
+
+
+
+
+
+
+///
+/// Real operations
+/// https://www.tensorflow.org/extend/adding_an_op
+///
+/// 1  tensorflow::Tensor::CheckTypeAndIsAligned tensor.cc                            487  0x55555700bbca
+/// 2  tensorflow::Tensor::shaped<int, 1ul> tensor.h                             612  0x55555577d930
+/// 3  tensorflow::Tensor::flat<int> tensor.h                             364  0x55555661a73a
+/// 4  tensorflow::(anonymous namespace)::ParameterizedTruncatedNormalOp<Eigen::ThreadPoolDevice, double>::Compute
+/// parameterized_truncated_normal_op.cc 263  0x55555661a73a
+/// 5  tensorflow::ThreadPoolDevice::Compute threadpool_device.cc                 59   0x555556e5a434
+/// 6  tensorflow::(anonymous namespace)::ExecutorState::Process executor.cc                          1653 0x555556e27751
+/// 7  tensorflow::(anonymous namespace)::ExecutorState::<lambda()>::operator()
+/// executor.cc                          2056 0x555556e2797f
+/// 8  std::_Function_handler<void(), tensorflow::(anonymous namespace)::ExecutorState::ScheduleReady(const TaggedNodeSeq&,
+/// tensorflow::(anonymous namespace)::ExecutorState::TaggedNodeReadyQueue *)::<lambda()>>::_M_invoke(const std::_Any_data &)
+/// functional                           1731 0x555556e2797f
+/// 9  std::function<void ()>::operator()() const functional                           2127 0x555557071fd1
+/// 10 tensorflow::thread::EigenEnvironment::ExecuteTask threadpool.cc                        81   0x555557071fd1
+/// 11 Eigen::NonBlockingThreadPoolTempl<tensorflow::thread::EigenEnvironment>::WorkerLoop
+/// NonBlockingThreadPool.h              232  0x555557071fd1
+/// 12 std::function<void ()>::operator()() const functional                           2127 0x555557070137
+/// 13 tensorflow::thread::EigenEnvironment::CreateThread(std::function<void ()> const&)::{lambda()#1}::operator()() const
+/// threadpool.cc                        56   0x555557070137
+/// 14 std::_Function_handler<void (), tensorflow::thread::EigenEnvironment::CreateThread(std::function<void ()>
+/// const&)::{lambda()#1}>::_M_invoke(std::_Any_data const&) functional                           1731 0x555557070137
+/// 15 ?? 0x7ffff71d783f
+/// 16 start_thread pthread_create.c                     456  0x7ffff74ab6da
+/// 17 clone clone.S                              105  0x7ffff6c46d7f

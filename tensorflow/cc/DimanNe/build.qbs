@@ -4,6 +4,7 @@ Project {
    qbsSearchPaths: ["qbs_templates"]
    references: [
       "tensorflow-sources/build.qbs",
+      "tensorflow_utils/build.qbs",
       "first_example/build.qbs"
    ]
 }
