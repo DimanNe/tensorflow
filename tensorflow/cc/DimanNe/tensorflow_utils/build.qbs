@@ -7,6 +7,8 @@ Product {
 
     files: [
         "variable_initializer.h",
-        "variable_initializer.cpp"
+        "variable_initializer.cpp",
+        "shape_helpers.cpp",
+        "shape_helpers.h"
     ]
 }

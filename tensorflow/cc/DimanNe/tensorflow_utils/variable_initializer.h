@@ -4,9 +4,9 @@
 #include "tensorflow/cc/ops/standard_ops.h"
 #include "tensorflow/core/framework/tensor.h"
 
-namespace tfu {
+#include "shape_helpers.h"
 
-    tensorflow::Input InputFromTensorShape(const tensorflow::TensorShape &Shape);
+namespace tfu {
 
     class TVariableInitializer {
     public:
