@@ -9,6 +9,8 @@ Product {
         "variable_initializer.h",
         "variable_initializer.cpp",
         "shape_helpers.cpp",
-        "shape_helpers.h"
+        "shape_helpers.h",
+        "context.h",
+        "context.cpp"
     ]
 }

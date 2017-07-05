@@ -4,7 +4,9 @@ cc_library(
        "variable_initializer.cpp",
        "variable_initializer.h",
        "shape_helpers.cpp",
-       "shape_helpers.h"       
+       "shape_helpers.h",
+       "context.h",
+       "context.cpp"
     ],
     linkstatic = 1,
     deps = [
