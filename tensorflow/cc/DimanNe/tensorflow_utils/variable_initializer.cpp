@@ -8,7 +8,7 @@ namespace tfu {
             std::vector<tf::Tensor> OutputsOfAssigning;
             TF_CHECK_OK(Session.Run({Assign}, &OutputsOfAssigning));
             // LOG(INFO) << OutputsOfAssigning[0].DebugString();
-            LOG(INFO) << OutputsOfAssigning[0].matrix<double>();
+            // LOG(INFO) << OutputsOfAssigning[0].matrix<double>();
             // LOG(INFO) << OutputsOfAssigning[0].flat<double>();
         }
     }
