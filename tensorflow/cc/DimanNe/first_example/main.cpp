@@ -28,7 +28,7 @@ int main() {
         {x, {{1., 2., 3., 4., 5., 6., 7., 8., 9., 0.}}} // 10x1 matrix
     };
     tf::ClientSession Session(s);
-    InitV(Session);
+    InitV(Session, s);
     TF_CHECK_OK(Session.Run(Feed, {Model}, &Outputs));
     LOG(INFO) << Outputs[0].matrix<double>();
 

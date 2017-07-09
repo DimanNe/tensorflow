@@ -24,12 +24,14 @@ namespace tfu {
             to::Variable    Variable     = {Scope, Shape, Dtype, VarAttrs};
             to::Assign      Assign       = to::Assign(Scope, Variable, Distribution);
             Assigns.push_back(Assign);
+            NodesToRemove.push_back(Distribution);
             return Variable;
         }
 
-        void operator()(tensorflow::ClientSession &Session) const;
+        void operator()(tensorflow::ClientSession &Session, tensorflow::Scope &Scope) const;
 
     private:
         std::vector<tensorflow::ops::Assign> Assigns;
+        std::vector<tensorflow::Output>      NodesToRemove;
     };
 }
