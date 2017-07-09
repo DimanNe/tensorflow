@@ -123,13 +123,14 @@ Module {
             var cmd = new Command("bazel", [
                                        "build",
                                        "-c",
-                                       "opt",
+                                       "opt", // "dbg",
                                        "--copt=-mavx",
                                       "--copt=-g",
                                        // "--copt=-mavx2",
                                        //"--copt=-mfma",
                                        //"--copt=-mfpmath=both",
                                        "--copt=-msse4.2",
+                                       "-s",
                                        bazelProjectName
                                    ]);
             cmd.workingDirectory = tensorFlowRoot;
