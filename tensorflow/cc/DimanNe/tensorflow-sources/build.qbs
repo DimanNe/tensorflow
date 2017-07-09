@@ -1924,6 +1924,40 @@ Product {
         "../../framework/test_op.cc",
         "../../framework/cc_op_gen_main.cc",
         "../../framework/cc_op_gen.cc",
-        "../../framework/cc_op_gen.h"
+        "../../framework/cc_op_gen.h",
+
+        "../../client/client_session.h",
+        "../../client/client_session_test.cc",
+        "../../client/client_session.cc",
+
+        "../../gradients/math_grad.cc",
+        "../../gradients/grad_testutil.h",
+        "../../gradients/nn_grad_test.cc",
+        "../../gradients/grad_testutil.cc",
+        "../../gradients/array_grad_test.cc",
+        "../../gradients/math_grad_test.cc",
+        "../../gradients/array_grad.cc",
+        "../../gradients/nn_grad.cc",
+
+        "../../ops/const_op.cc",
+        "../../ops/const_op_test.cc",
+        "../../ops/standard_ops.h",
+        "../../ops/const_op.h",
+
+        "../../saved_model/loader_test.cc",
+        "../../saved_model/tag_constants.h",
+        "../../saved_model/loader.h",
+        "../../saved_model/signature_constants.h",
+        "../../saved_model/constants.h",
+        "../../saved_model/loader.cc",
+
+        "../../training/queue_runner_test.cc",
+        "../../training/queue_runner.cc",
+        "../../training/coordinator.cc",
+        "../../training/coordinator.h",
+        "../../training/queue_runner.h",
+        "../../training/coordinator_test.cc",
+
+        "../../tutorials/example_trainer.cc"
     ]
 }
