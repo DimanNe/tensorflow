@@ -123,7 +123,7 @@ Module {
             var cmd = new Command("bazel", [
                                        "build",
                                        "-c",
-                                       "opt", // "dbg",
+                                       "dbg", // "opt",
                                        "--copt=-mavx",
                                       "--copt=-g",
                                        // "--copt=-mavx2",
