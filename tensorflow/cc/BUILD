@@ -244,6 +244,7 @@ cc_library(
         ":gradients",
         "//tensorflow/core:lib_proto_parsing",
     ],
+    alwayslink = 1,
 )
 
 tf_cc_test(
@@ -274,6 +275,7 @@ cc_library(
         "//tensorflow/core:core_cpu",
         "//tensorflow/core:framework",
     ],
+    alwayslink = 1,
 )
 
 tf_cc_test(
@@ -304,6 +306,7 @@ cc_library(
         "//tensorflow/core:core_cpu",
         "//tensorflow/core:framework",
     ],
+    alwayslink = 1,
 )
 
 tf_cc_test(
