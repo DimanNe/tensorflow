@@ -50,11 +50,9 @@ tf::Output CreateMLP(tf::Scope &s, tfu::TVariableInitializer &InitV, const tf::O
 
 
 tf::Output AddLossFunction(tf::Scope &s, const tf::Output &ActualValue, const tf::Input &ExpectedValue) {
-    // tf::Output Result = to::SquaredDifference(s.WithOpName("SqDiff"), ActualValue, ExpectedValue);
-    tf::Output Result = to::Square(s.WithOpName("SqDiff"), ActualValue);
+    tf::Output Result = to::SquaredDifference(s.WithOpName("SqDiff"), ActualValue, ExpectedValue);
     return Result;
 }
-
 
 int main() {
     tf::Scope                 r = tf::Scope::NewRootScope();
@@ -67,6 +65,7 @@ int main() {
     tf::Output        Weights;
     const tf::Output  Model = CreateMLP(s, InitV, x, Weights);
     const tf::Output  Loss  = AddLossFunction(s, Model, Expec);
+
     tf::ClientSession Session(s);
     InitV(Session, s);
 
@@ -75,22 +74,39 @@ int main() {
     tf::OutputList dLossdWeights;
     TF_CHECK_OK(tf::AddSymbolicGradients(s, {Loss}, {Weights}, {dLossdLoss}, &dLossdWeights));
 
-    std::vector<tf::Tensor> Outputs;
     // clang-format off
     tf::ClientSession::FeedType Feed = {
         { x,     {{1., 1.}/*, {0.01, 0.01}*/}     },
         { Expec, {{1.}                      }     }
     };
     // clang-format on
-    // TF_CHECK_OK(Session.Run(Feed, {Model, Loss}, &Outputs));
-    // LOG(INFO) << "Prediction: " << Outputs[0].matrix<double>();
-    // LOG(INFO) << "Loss:       " << Outputs[1].matrix<double>();
 
-    TF_CHECK_OK(Session.Run(Feed, dLossdWeights, &Outputs));
-    LOG(INFO) << "Prediction: " << Outputs[0].matrix<double>();
-    // LOG(INFO) << "Loss:       " << Outputs[1].matrix<double>();
+    const tf::Output LearningRate = to::Const(s.WithOpName("learning_rate"), 0.1);
+    tf::Tensor NumericGradients;
 
 
+    for(tf::uint32 i = 0; i < 10; ++i) {
+        {
+            std::vector<tf::Tensor> Outputs;
+            tf::OutputList NodesOfInterest;
+            NodesOfInterest.push_back(Model);
+            NodesOfInterest.push_back(Loss);
+            NodesOfInterest.insert(NodesOfInterest.end(), dLossdWeights.begin(), dLossdWeights.end());
+            TF_CHECK_OK(Session.Run(Feed, NodesOfInterest, &Outputs));
+            LOG(INFO) << "Prediction: " << Outputs[0].matrix<double>() << ", Loss: " << Outputs[1].matrix<double>();
+            // LOG(INFO) << "Gradients:  " << Outputs[2].matrix<double>();
+
+            NumericGradients = Outputs[2];
+        }
+        {
+            const tf::Input Delta(NumericGradients);
+            const tf::Output ApplySGD = to::ApplyGradientDescent(s, Weights, LearningRate, Delta);
+            std::vector<tf::Tensor> Outputs;
+            TF_CHECK_OK(Session.Run({ApplySGD}, &Outputs));
+            // LOG(INFO) << "New Value of Weights: " << Outputs[0].DebugString();
+            //std::cout << std::endl;
+        }
+    }
 
     return 0;
 }
