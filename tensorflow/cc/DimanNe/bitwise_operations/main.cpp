@@ -55,6 +55,7 @@ tf::Output AddLossFunction(tf::Scope &s, const tf::Output &ActualValue, const tf
     return Result;
 }
 
+
 int main() {
     tf::Scope                 r = tf::Scope::NewRootScope();
     tf::Scope                 s = r.ExitOnError();

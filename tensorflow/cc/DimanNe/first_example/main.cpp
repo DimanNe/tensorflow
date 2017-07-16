@@ -38,8 +38,6 @@ int main() {
 
 
 
-
-
 ///
 /// Real operations
 /// https://www.tensorflow.org/extend/adding_an_op

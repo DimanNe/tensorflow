@@ -12,7 +12,6 @@ cc_library(
     deps = [
         "//tensorflow/cc:cc_ops",
         "//tensorflow/cc:client_session",
-        "//tensorflow/core:tensorflow",
     ],
     visibility = ["//visibility:public"]
 )

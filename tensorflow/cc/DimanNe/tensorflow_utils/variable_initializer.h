@@ -7,7 +7,6 @@
 #include "shape_helpers.h"
 
 namespace tfu {
-
     class TVariableInitializer {
     public:
         template <class TDistr, class... TDistrArgs>
