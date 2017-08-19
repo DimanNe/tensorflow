@@ -252,7 +252,9 @@ class SavedModelBuilder(object):
           restore op upon a load.
       clear_devices: Set to true if the device info on the default graph should
           be cleared.
-      main_op: Op or group of ops to execute when the graph is loaded.
+      main_op: Op or group of ops to execute when the graph is loaded. Note
+          that when the main_op is specified it is run after the restore op at
+          load-time.
 
     Raises:
       AssertionError: If the variables for the SavedModel have not been saved
@@ -284,6 +286,14 @@ class SavedModelBuilder(object):
         write_version=saver_pb2.SaverDef.V2,
         allow_empty=True)
 
+    # The graph almost certainly previously contained at least one Saver, and
+    # possibly several (e.g. one for loading a pretrained embedding, and another
+    # for the model weights).  However, a *new* Saver was just created that
+    # includes all of the variables.  Removing the preexisting ones was the
+    # motivation for the clear_extraneous_savers option, but it turns out that
+    # there are edge cases where that option breaks the graph.  Until that is
+    # resolved, we just leave the option set to False for now.
+    # TODO(soergel): Reinstate clear_extraneous_savers=True when possible.
     meta_graph_def = saver.export_meta_graph(clear_devices=clear_devices)
 
     # Tag the meta graph def and add it to the SavedModel.
@@ -316,7 +326,9 @@ class SavedModelBuilder(object):
           restore op upon a load.
       clear_devices: Set to true if the device info on the default graph should
           be cleared.
-      main_op: Op or group of ops to execute when the graph is loaded.
+      main_op: Op or group of ops to execute when the graph is loaded. Note
+          that when the main_op is specified it is run after the restore op at
+          load-time.
     """
     if self._has_saved_variables:
       raise AssertionError("Graph state including variables and assets has "
@@ -362,6 +374,15 @@ class SavedModelBuilder(object):
     saver.save(sess, variables_path, write_meta_graph=False, write_state=False)
 
     # Export the meta graph def.
+
+    # The graph almost certainly previously contained at least one Saver, and
+    # possibly several (e.g. one for loading a pretrained embedding, and another
+    # for the model weights).  However, a *new* Saver was just created that
+    # includes all of the variables.  Removing the preexisting ones was the
+    # motivation for the clear_extraneous_savers option, but it turns out that
+    # there are edge cases where that option breaks the graph.  Until that is
+    # resolved, we just leave the option set to False for now.
+    # TODO(soergel): Reinstate clear_extraneous_savers=True when possible.
     meta_graph_def = saver.export_meta_graph(clear_devices=clear_devices)
 
     # Tag the meta graph def and add it to the SavedModel.

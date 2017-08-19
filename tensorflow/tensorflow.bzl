@@ -22,6 +22,9 @@ load(
     "if_mkl",)
 
 
+def full_path(relative_paths):
+  return [PACKAGE_NAME + "/" + relative for relative in relative_paths]
+
 # List of proto files for android builds
 def tf_android_core_proto_sources(core_proto_sources_relative):
   return [
@@ -69,9 +72,24 @@ def if_android_arm64(a):
   })
 
 
+def if_android_mips(a):
+  return select({
+      clean_dep("//tensorflow:android_mips"): a,
+      "//conditions:default": [],
+  })
+
+
 def if_not_android(a):
   return select({
       clean_dep("//tensorflow:android"): [],
+      "//conditions:default": a,
+  })
+
+
+def if_not_android_mips_and_mips64(a):
+  return select({
+      clean_dep("//tensorflow:android_mips"): [],
+      clean_dep("//tensorflow:android_mips64"): [],
       "//conditions:default": a,
   })
 
@@ -109,41 +127,55 @@ def if_not_mobile(a):
 def if_not_windows(a):
   return select({
       clean_dep("//tensorflow:windows"): [],
+      clean_dep("//tensorflow:windows_msvc"): [],
       "//conditions:default": a,
   })
 
 
-def if_x86(a):
+def if_linux_x86_64(a):
   return select({
       clean_dep("//tensorflow:linux_x86_64"): a,
-      clean_dep("//tensorflow:windows"): a,
       "//conditions:default": [],
   })
 
+def if_darwin(a):
+  return select({
+      clean_dep("//tensorflow:darwin"): a,
+      "//conditions:default": [],
+  })
+
+WIN_COPTS = [
+    "/DLANG_CXX11",
+    "/D__VERSION__=\\\"MSVC\\\"",
+    "/DPLATFORM_WINDOWS",
+    "/DTF_COMPILE_LIBRARY",
+    "/DEIGEN_HAS_C99_MATH",
+    "/DTENSORFLOW_USE_EIGEN_THREADPOOL",
+    "/DEIGEN_AVOID_STL_ARRAY",
+    "/Iexternal/gemmlowp",
+    "/wd4018", # -Wno-sign-compare
+    "/U_HAS_EXCEPTIONS", "/D_HAS_EXCEPTIONS=1", "/EHsc", # -fno-exceptions
+    "/DNOGDI",
+]
 
 # LINT.IfChange
 def tf_copts():
-  return ([
+  return (if_not_windows([
       "-DEIGEN_AVOID_STL_ARRAY",
       "-Iexternal/gemmlowp",
       "-Wno-sign-compare",
       "-fno-exceptions",
-  ] + if_cuda(["-DGOOGLE_CUDA=1"]) + if_mkl(["-DINTEL_MKL=1"]) + if_android_arm(
-      ["-mfpu=neon"]) + if_x86(["-msse3"]) + select({
+      "-ftemplate-depth=900",
+  ]) + if_cuda(["-DGOOGLE_CUDA=1"]) + if_mkl(["-DINTEL_MKL=1", "-fopenmp",]) + if_android_arm(
+      ["-mfpu=neon"]) + if_linux_x86_64(["-msse3"]) + select({
           clean_dep("//tensorflow:android"): [
               "-std=c++11",
               "-DTF_LEAN_BINARY",
               "-O2",
           ],
           clean_dep("//tensorflow:darwin"): [],
-          clean_dep("//tensorflow:windows"): [
-              "/DLANG_CXX11",
-              "/D__VERSION__=\\\"MSVC\\\"",
-              "/DPLATFORM_WINDOWS",
-              "/DTF_COMPILE_LIBRARY",
-              "/DEIGEN_HAS_C99_MATH",
-              "/DTENSORFLOW_USE_EIGEN_THREADPOOL",
-          ],
+          clean_dep("//tensorflow:windows"): WIN_COPTS,
+          clean_dep("//tensorflow:windows_msvc"): WIN_COPTS,
           clean_dep("//tensorflow:ios"): ["-std=c++11"],
           "//conditions:default": ["-pthread"]
       }))
@@ -154,7 +186,7 @@ def tf_opts_nortti_if_android():
       "-fno-rtti",
       "-DGOOGLE_PROTOBUF_NO_RTTI",
       "-DGOOGLE_PROTOBUF_NO_STATIC_INITIALIZER",
-  ]) + if_android_x86(["-msse4.1"])
+  ])
 
 
 # LINT.ThenChange(//tensorflow/contrib/android/cmake/CMakeLists.txt)
@@ -256,8 +288,8 @@ def tf_gen_op_wrappers_cc(name,
                           override_file=None,
                           include_internal_ops=0,
                           visibility=None):
-  subsrcs = other_srcs
-  subhdrs = other_hdrs
+  subsrcs = other_srcs[:]
+  subhdrs = other_hdrs[:]
   internalsrcs = []
   internalhdrs = []
   for n in op_lib_names:
@@ -305,7 +337,26 @@ def tf_gen_op_wrappers_cc(name,
       visibility=[clean_dep("//tensorflow:internal")])
 
 
-# Invoke this rule in .../tensorflow/python to build the wrapper library.
+# Generates a Python library target wrapping the ops registered in "deps".
+#
+# Args:
+#   name: used as the name of the generated target and as a name component of
+#     the intermediate files.
+#   out: name of the python file created by this rule. If None, then
+#     "ops/gen_{name}.py" is used.
+#   hidden: Optional list of ops names to make private in the Python module.
+#     It is invalid to specify both "hidden" and "op_whitelist".
+#   visibility: passed to py_library.
+#   deps: list of dependencies for the generated target.
+#   require_shape_functions: leave this as False.
+#   hidden_file: optional file that contains a list of op names to make private
+#     in the generated Python module. Each op name should be on a line by
+#     itself. Lines that start with characters that are invalid op name
+#     starting characters are treated as comments and ignored.
+#   generated_target_name: name of the generated target (overrides the
+#     "name" arg)
+#   op_whitelist: if not empty, only op names in this list will be wrapped. It
+#     is invalid to specify both "hidden" and "op_whitelist".
 def tf_gen_op_wrapper_py(name,
                          out=None,
                          hidden=None,
@@ -313,7 +364,11 @@ def tf_gen_op_wrapper_py(name,
                          deps=[],
                          require_shape_functions=False,
                          hidden_file=None,
-                         generated_target_name=None):
+                         generated_target_name=None,
+                         op_whitelist=[]):
+  if (hidden or hidden_file) and op_whitelist:
+    fail('Cannot pass specify both hidden and op_whitelist.')
+
   # Construct a cc_binary containing the specified ops.
   tool_name = "gen_" + name + "_py_wrappers_cc"
   if not deps:
@@ -334,14 +389,16 @@ def tf_gen_op_wrapper_py(name,
     out = "ops/gen_" + name + ".py"
 
   if hidden:
-    # `hidden` is a list of op names to be hidden in the generated module.
-    native.genrule(
-        name=name + "_pygenrule",
-        outs=[out],
-        tools=[tool_name],
-        cmd=("$(location " + tool_name + ") " + ",".join(hidden) + " " +
-             ("1" if require_shape_functions else "0") + " > $@"))
-  elif hidden_file:
+    op_list_arg = ",".join(hidden)
+    op_list_is_whitelist = False
+  elif op_whitelist:
+    op_list_arg = ",".join(op_whitelist)
+    op_list_is_whitelist = True
+  else:
+    op_list_arg = "''"
+    op_list_is_whitelist = False
+
+  if hidden_file:
     # `hidden_file` is file containing a list of op names to be hidden in the
     # generated module.
     native.genrule(
@@ -352,13 +409,13 @@ def tf_gen_op_wrapper_py(name,
         cmd=("$(location " + tool_name + ") @$(location " + hidden_file + ") " +
              ("1" if require_shape_functions else "0") + " > $@"))
   else:
-    # No ops should be hidden in the generated module.
     native.genrule(
         name=name + "_pygenrule",
         outs=[out],
         tools=[tool_name],
-        cmd=("$(location " + tool_name + ") " +
-             ("1" if require_shape_functions else "0") + " > $@"))
+        cmd=("$(location " + tool_name + ") " + op_list_arg + " " +
+             ("1" if require_shape_functions else "0") + " " +
+             ("1" if op_list_is_whitelist else "0") + " > $@"))
 
   # Make a py_library out of the generated python file.
   if not generated_target_name:
@@ -453,6 +510,29 @@ def tf_cuda_cc_test(name,
       linkopts=linkopts,
       args=args)
 
+def tf_cuda_only_cc_test(name,
+                    srcs=[],
+                    deps=[],
+                    tags=[],
+                    data=[],
+                    size="medium",
+                    linkstatic=0,
+                    args=[],
+                    linkopts=[]):
+  native.cc_test(
+    name="%s%s" % (name, "_gpu"),
+    srcs=srcs,
+    size=size,
+    args=args,
+    copts= _cuda_copts() + tf_copts(),
+    data=data,
+    deps=deps + if_cuda([
+        clean_dep("//tensorflow/core:cuda"),
+        clean_dep("//tensorflow/core:gpu_lib"),
+    ]),
+    linkopts=["-lpthread", "-lm"] + linkopts,
+    linkstatic=linkstatic,
+    tags=tags)
 
 # Create a cc_test for each of the tensorflow tests listed in "tests"
 def tf_cc_tests(srcs,
@@ -815,7 +895,8 @@ def cc_header_only_library(name, deps=[], **kwargs):
 
 def tf_custom_op_library_additional_deps():
   return [
-      "@protobuf//:protobuf_headers",
+      "@protobuf_archive//:protobuf_headers",
+      "@nsync//:nsync_headers",
       clean_dep("//third_party/eigen3"),
       clean_dep("//tensorflow/core:framework_headers_lib"),
   ]
@@ -965,6 +1046,7 @@ def tf_py_wrap_cc(name,
           clean_dep("//tensorflow:tf_exported_symbols.lds")
       ],
       clean_dep("//tensorflow:windows"): [],
+      clean_dep("//tensorflow:windows_msvc"): [],
       "//conditions:default": [
           "-Wl,--version-script",
           clean_dep("//tensorflow:tf_version_script.lds")
@@ -975,6 +1057,7 @@ def tf_py_wrap_cc(name,
           clean_dep("//tensorflow:tf_exported_symbols.lds")
       ],
       clean_dep("//tensorflow:windows"): [],
+      clean_dep("//tensorflow:windows_msvc"): [],
       "//conditions:default": [
           clean_dep("//tensorflow:tf_version_script.lds")
       ]
@@ -983,9 +1066,9 @@ def tf_py_wrap_cc(name,
   native.cc_binary(
       name=cc_library_name,
       srcs=[module_name + ".cc"],
-      copts=(copts + [
+      copts=(copts + if_not_windows([
           "-Wno-self-assign", "-Wno-sign-compare", "-Wno-write-strings"
-      ] + tf_extension_copts()),
+      ]) + tf_extension_copts()),
       linkopts=tf_extension_linkopts() + extra_linkopts,
       linkstatic=1,
       linkshared=1,
@@ -1026,7 +1109,7 @@ def tf_py_test(name,
                flaky=0,
                xla_enabled=False):
   if xla_enabled:
-    additional_deps += tf_additional_xla_deps_py()
+    additional_deps = additional_deps + tf_additional_xla_deps_py()
   native.py_test(
       name=name,
       size=size,

@@ -29,6 +29,7 @@ limitations under the License.
 #include "tensorflow/core/framework/op.h"
 #include "tensorflow/core/framework/op_kernel.h"
 #include "tensorflow/core/framework/tensor_testutil.h"
+#include "tensorflow/core/framework/versions.pb.h"
 #include "tensorflow/core/graph/graph_constructor.h"
 #include "tensorflow/core/lib/core/notification.h"
 #include "tensorflow/core/lib/core/status.h"
@@ -40,8 +41,9 @@ limitations under the License.
 #include "tensorflow/core/util/equal_graph_def.h"
 
 namespace tensorflow {
+namespace {
 
-typedef FunctionDefHelper FDH;
+using FDH = FunctionDefHelper;
 
 Status GetOpSig(const string& op, const OpDef** sig) {
   return OpRegistry::Global()->LookUpOpDef(op, sig);
@@ -58,13 +60,29 @@ void HasError(const Status& s, const string& substr) {
       << s << ", expected substring " << substr;
 }
 
+// A helper class to make AttrSlice from initializer lists
+class Attrs {
+ public:
+  Attrs(const std::initializer_list<  // NOLINT(runtime/explicit)
+        std::pair<string, FunctionDefHelper::AttrValueWrapper>>& attrs) {
+    for (const auto& aval : attrs) {
+      map_.insert({aval.first, aval.second.proto});
+    }
+  }
+
+  operator AttrSlice() { return AttrSlice(&map_); }  // NOLINT(runtime/explicit)
+
+ private:
+  AttrValueMap map_;
+};
+
 class FunctionTest : public ::testing::Test {
  protected:
   FunctionTest()
       : device_(DeviceFactory::NewDevice("CPU", {},
                                          "/job:localhost/replica:0/task:0")) {}
 
-  void Create(const FunctionDef& fdef, InstantiateAttrValueSlice attrs) {
+  void Create(const FunctionDef& fdef, Attrs attrs) {
     exec_ = nullptr;
     InstantiationResult result;
     TF_CHECK_OK(InstantiateFunction(fdef, attrs, GetOpSig, &result));
@@ -76,7 +94,7 @@ class FunctionTest : public ::testing::Test {
     GraphConstructorOptions opts;
     opts.allow_internal_ops = true;
     opts.expect_device_spec = false;
-    TF_CHECK_OK(ConvertGraphDefToGraph(opts, result.gdef, g));
+    TF_CHECK_OK(ConvertNodeDefsToGraph(opts, result.nodes, g));
 
     const int version = g->versions().producer();
     LocalExecutorParams params;
@@ -145,14 +163,14 @@ class FunctionLibraryRuntimeTest : public ::testing::Test {
     for (const auto& fdef : flib) *(proto.add_function()) = fdef;
     lib_def_.reset(new FunctionLibraryDefinition(OpRegistry::Global(), proto));
     OptimizerOptions opts;
-    lib_.reset(NewFunctionLibraryRuntime(nullptr, Env::Default(), device_.get(),
-                                         TF_GRAPH_DEF_VERSION, lib_def_.get(),
-                                         opts));
+    lib_ =
+        NewFunctionLibraryRuntime(nullptr, Env::Default(), device_.get(),
+                                  TF_GRAPH_DEF_VERSION, lib_def_.get(), opts);
     fdef_lib_ = lib_def_->ToProto();
   }
 
-  Status Run(const string& name, InstantiateAttrValueSlice attrs,
-             const std::vector<Tensor>& args, std::vector<Tensor*> rets) {
+  Status Run(const string& name, Attrs attrs, const std::vector<Tensor>& args,
+             std::vector<Tensor*> rets) {
     FunctionLibraryRuntime::Handle handle;
     Status status = lib_->Instantiate(name, attrs, &handle);
     if (!status.ok()) {
@@ -188,8 +206,7 @@ class FunctionLibraryRuntimeTest : public ::testing::Test {
     return Status::OK();
   }
 
-  std::unique_ptr<Graph> GetFuncBody(const string& name,
-                                     InstantiateAttrValueSlice attrs) {
+  std::unique_ptr<Graph> GetFuncBody(const string& name, Attrs attrs) {
     FunctionLibraryRuntime::Handle handle;
     Status status = lib_->Instantiate(name, attrs, &handle);
     if (!status.ok()) {
@@ -203,8 +220,7 @@ class FunctionLibraryRuntimeTest : public ::testing::Test {
     return ret;
   }
 
-  std::unique_ptr<Graph> GetGradBody(const string& func,
-                                     InstantiateAttrValueSlice attrs) {
+  std::unique_ptr<Graph> GetGradBody(const string& func, Attrs attrs) {
     FunctionLibraryRuntime::Handle handle;
     Status status = lib_->Instantiate(func, attrs, &handle);
     if (!status.ok()) {
@@ -268,6 +284,7 @@ Output Call(Scope* scope, const string& op_name, const string& fn_name,
   Status status;
   Node* n = scope->graph()->AddNode(def, &status);
   TF_CHECK_OK(status);
+  TF_CHECK_OK(scope->DoShapeInference(n));
   for (int i = 0; i < inputs.size(); ++i) {
     scope->graph()->AddEdge(inputs[i].node(), inputs[i].index(), n, i);
   }
@@ -615,13 +632,14 @@ TEST_F(FunctionLibraryRuntimeTest, Error_InstantiaionError) {
 
   // Instantiating "XTimesTwo" should fail.
   FunctionLibraryRuntime::Handle handle;
-  HasError(lib_->Instantiate("XTimesTwo", {{"T", DT_FLOAT}}, &handle),
+  HasError(lib_->Instantiate("XTimesTwo", Attrs({{"T", DT_FLOAT}}), &handle),
            "Not found: type attr not found");
 
   // But XTimesFour and XTimes16 instantiation should succeed. Only
   // when they run, they fail because XTimesTwo is bad.
-  TF_CHECK_OK(lib_->Instantiate("XTimesFour", {{"T", DT_FLOAT}}, &handle));
-  TF_CHECK_OK(lib_->Instantiate("XTimes16", {{"T", DT_FLOAT}}, &handle));
+  TF_CHECK_OK(
+      lib_->Instantiate("XTimesFour", Attrs({{"T", DT_FLOAT}}), &handle));
+  TF_CHECK_OK(lib_->Instantiate("XTimes16", Attrs({{"T", DT_FLOAT}}), &handle));
 
   auto x = test::AsTensor<float>({1, 2, 3, 4});
   Tensor y;
@@ -928,13 +946,12 @@ bool DoNothing(Graph* g) { return false; }
 GraphDef Optimize(const std::function<bool(Graph* g)>& pass,
                   const FunctionDef& fdef) {
   InstantiationResult result;
-  InstantiateAttrValueMap empty;
-  TF_CHECK_OK(InstantiateFunction(fdef, empty, GetOpSig, &result));
+  TF_CHECK_OK(InstantiateFunction(fdef, AttrSlice(), GetOpSig, &result));
   std::unique_ptr<Graph> g(new Graph(OpRegistry::Global()));
   GraphConstructorOptions opts;
   opts.allow_internal_ops = true;
   opts.expect_device_spec = false;
-  TF_CHECK_OK(ConvertGraphDefToGraph(opts, result.gdef, g.get()));
+  TF_CHECK_OK(ConvertNodeDefsToGraph(opts, result.nodes, g.get()));
   pass(g.get());
   std::unique_ptr<Graph> g1(new Graph(OpRegistry::Global()));
   CopyGraph(*g, g1.get());
@@ -973,7 +990,7 @@ TEST(OptimizationTest, RemoveDeadNodes) {
 
   GraphDef expected;
   {
-    Scope s = Scope::NewRootScope();
+    Scope s = Scope::DisabledShapeInferenceScope();
     auto x = ops::_Arg(s.WithOpName("x"), DT_INT32, 0);
     auto o = ops::Const(s.WithOpName("o"), 1);
     auto keep_me = ops::RandomUniform(s.WithOpName("keep_me"), {o}, DT_FLOAT);
@@ -1054,7 +1071,7 @@ TEST(OptimizationTest, RemoveIdentityNodes) {
        {{"y"}, "Add", {"a", "o"}, {{"T", T}}}});
 
   {
-    Scope s = Scope::NewRootScope();
+    Scope s = Scope::DisabledShapeInferenceScope();
     auto x = ops::_Arg(s.WithOpName("x"), DT_INT32, 0);
     auto o = ops::Const(s.WithOpName("o"), 1);
     auto a = ops::Square(s.WithOpName("a"), x);
@@ -1071,7 +1088,7 @@ TEST(OptimizationTest, RemoveIdentityNodes) {
   }
 
   {
-    Scope s = Scope::NewRootScope();
+    Scope s = Scope::DisabledShapeInferenceScope();
     auto x = ops::_Arg(s.WithOpName("x"), DT_INT32, 0);
     auto o = ops::Const(s.WithOpName("o"), 1);
     auto a = ops::Square(s.WithOpName("a"), x);
@@ -1121,7 +1138,7 @@ TEST(OptimizationTest, RemoveListArrayConverter) {
       {{"o", "o:sum"}});
 
   {
-    Scope scope = Scope::NewRootScope();
+    Scope scope = Scope::DisabledShapeInferenceScope();
     auto i = ops::_Arg(scope.WithOpName("i"), DT_FLOAT, 0);
     auto zero = ops::Const(scope.WithOpName("zero"), 0);
     auto s = ops::Split(scope.WithOpName("s"), zero, i, 4);
@@ -1206,7 +1223,7 @@ TEST(OptimizationTest, RemoveListArrayConverter_WithContolDeps) {
       {{"o", "o:sum"}});
 
   {
-    Scope s = Scope::NewRootScope();
+    Scope s = Scope::DisabledShapeInferenceScope();
     auto i = ops::_Arg(s.WithOpName("i"), DT_FLOAT, 0);
     auto dummy = ops::Const(s.WithOpName("dummy"), 0);
     auto x = ops::_ListToArray(s.WithOpName("x").WithControlDependencies(dummy),
@@ -1248,4 +1265,5 @@ TEST(OptimizationTest, RemoveListArrayConverter_WithContolDeps) {
   TF_EXPECT_GRAPH_EQ(expected, Optimize(remove_listarray_and_identity, func));
 }
 
-}  // end namespace tensorflow
+}  // namespace
+}  // namespace tensorflow

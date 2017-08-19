@@ -14,6 +14,7 @@ limitations under the License.
 ==============================================================================*/
 
 #include "tensorflow/cc/framework/grad_op_registry.h"
+#include "tensorflow/cc/framework/gradient_checker.h"
 #include "tensorflow/cc/framework/testutil.h"
 #include "tensorflow/cc/gradients/grad_testutil.h"
 #include "tensorflow/cc/ops/standard_ops.h"
@@ -45,7 +46,12 @@ class CWiseUnaryGradTest : public ::testing::Test {
     EXPM1,
     LOG,
     LOG1P,
+    SINH,
+    COSH,
     TANH,
+    ASINH,
+    ACOSH,
+    ATANH,
     SIGMOID,
     SIGN,
     SIN,
@@ -111,8 +117,23 @@ class CWiseUnaryGradTest : public ::testing::Test {
       case LOG1P:
         y = Log1p(scope_, x);
         break;
+      case SINH:
+        y = Sinh(scope_, x);
+        break;
+      case COSH:
+        y = Cosh(scope_, x);
+        break;
       case TANH:
         y = Tanh(scope_, x);
+        break;
+      case ASINH:
+        y = Asinh(scope_, x);
+        break;
+      case ACOSH:
+        y = Acosh(scope_, x);
+        break;
+      case ATANH:
+        y = Atanh(scope_, x);
         break;
       case SIGMOID:
         y = Sigmoid(scope_, x);
@@ -337,6 +358,50 @@ TEST_F(CWiseUnaryGradTest, Log1p_Complex) {
   TestCWiseGrad<complex64>(LOG1P, x_fn, dy_fn, dx_fn);
 }
 
+TEST_F(CWiseUnaryGradTest, Sinh) {
+  auto x_fn = [this](const int i) { return RV({0, -1, 1, -2, 2, -3, 3}); };
+  auto dy_fn = [this](const float x) { return x + RV({-2, 2, -3, 3, -4, 4}); };
+  auto dx_fn = [this](const float x, const float dy) {
+    return dy * std::cosh(x);
+  };
+  TestCWiseGrad<float>(SINH, x_fn, dy_fn, dx_fn);
+}
+
+TEST_F(CWiseUnaryGradTest, Sinh_Complex) {
+  auto x_fn = [this](const int i) {
+    return CRV({{1, 0}, {0, 1}, {2, -1}, {1, 2}, {3, 4}});
+  };
+  auto dy_fn = [this](const complex64& x) {
+    return x + CRV({{-2, 2}, {-3, 3}, {1, -4}});
+  };
+  auto dx_fn = [this](const complex64& x, const complex64& dy) {
+    return dy * conjugate(std::cosh(x));
+  };
+  TestCWiseGrad<complex64>(SINH, x_fn, dy_fn, dx_fn);
+}
+
+TEST_F(CWiseUnaryGradTest, Cosh) {
+  auto x_fn = [this](const int i) { return RV({0, -1, 1, -2, 2, -3, 3}); };
+  auto dy_fn = [this](const float x) { return x + RV({-2, 2, -3, 3, -4, 4}); };
+  auto dx_fn = [this](const float x, const float dy) {
+    return dy * std::sinh(x);
+  };
+  TestCWiseGrad<float>(COSH, x_fn, dy_fn, dx_fn);
+}
+
+TEST_F(CWiseUnaryGradTest, Cosh_Complex) {
+  auto x_fn = [this](const int i) {
+    return CRV({{1, 0}, {0, 1}, {2, -1}, {1, 2}, {3, 4}});
+  };
+  auto dy_fn = [this](const complex64& x) {
+    return x + CRV({{-2, 2}, {-3, 3}, {1, -4}});
+  };
+  auto dx_fn = [this](const complex64& x, const complex64& dy) {
+    return dy * conjugate(std::sinh(x));
+  };
+  TestCWiseGrad<complex64>(COSH, x_fn, dy_fn, dx_fn);
+}
+
 TEST_F(CWiseUnaryGradTest, Tanh) {
   auto x_fn = [this](const int i) { return RV({0, -1, 1, -2, 2, -3, 3}); };
   auto dy_fn = [this](const float x) { return x + RV({-2, 2, -3, 3, -4, 4}); };
@@ -359,6 +424,78 @@ TEST_F(CWiseUnaryGradTest, Tanh_Complex) {
     return dy * conjugate((one_ - y * y));
   };
   TestCWiseGrad<complex64>(TANH, x_fn, dy_fn, dx_fn);
+}
+
+TEST_F(CWiseUnaryGradTest, Asinh) {
+  auto x_fn = [this](const int i) { return RV({0, -1, 1, -2, 2, -3, 3}); };
+  auto dy_fn = [this](const float x) { return x + RV({-2, 2, -3, 3, -4, 4}); };
+  auto dx_fn = [this](const float x, const float dy) {
+    auto y = std::asinh(x);
+    return dy / std::cosh(y);
+  };
+  TestCWiseGrad<float>(ASINH, x_fn, dy_fn, dx_fn);
+}
+
+TEST_F(CWiseUnaryGradTest, Asinh_Complex) {
+  auto x_fn = [this](const int i) {
+    return CRV({{1, 0}, {0, 1}, {2, -1}, {1, 2}, {3, 4}});
+  };
+  auto dy_fn = [this](const complex64& x) {
+    return x + CRV({{-2, 2}, {-3, 3}, {1, -4}});
+  };
+  auto dx_fn = [this](const complex64& x, const complex64& dy) {
+    auto y = std::asinh(x);
+    return dy / conjugate(std::cosh(y));
+  };
+  TestCWiseGrad<complex64>(ASINH, x_fn, dy_fn, dx_fn);
+}
+
+TEST_F(CWiseUnaryGradTest, Acosh) {
+  auto x_fn = [this](const int i) { return RV({1, 2, 3, 4, 5, 6, 7}); };
+  auto dy_fn = [this](const float x) {
+    return x + RV({8, 9, 10, 11, 12, 13, 14});
+  };
+  auto dx_fn = [this](const float x, const float dy) {
+    auto y = std::acosh(x);
+    return dy / std::sinh(y);
+  };
+  TestCWiseGrad<float>(ACOSH, x_fn, dy_fn, dx_fn);
+}
+
+TEST_F(CWiseUnaryGradTest, Acosh_Complex) {
+  auto x_fn = [this](const int i) {
+    return CRV({{1, 1}, {2, 1}, {1, 4}, {1, 2}, {3, 4}});
+  };
+  auto dy_fn = [this](const complex64& x) {
+    return x + CRV({{2, 2}, {3, 3}, {1, 4}});
+  };
+  auto dx_fn = [this](const complex64& x, const complex64& dy) {
+    auto y = std::acosh(x);
+    return dy / conjugate(std::sinh(y));
+  };
+  TestCWiseGrad<complex64>(ACOSH, x_fn, dy_fn, dx_fn);
+}
+
+TEST_F(CWiseUnaryGradTest, Atanh) {
+  auto x_fn = [this](const int i) { return RV({0, -0.5, 0.5, -0.1, 0.1}); };
+  auto dy_fn = [this](const float x) { return x + RV({-2, 2, -3, 3, -4, 4}); };
+  auto dx_fn = [this](const float x, const float dy) {
+    return dy * (1. / (1. - x * x));
+  };
+  TestCWiseGrad<float>(ATANH, x_fn, dy_fn, dx_fn);
+}
+
+TEST_F(CWiseUnaryGradTest, Atanh_Complex) {
+  auto x_fn = [this](const int i) {
+    return CRV({{0.1, 0}, {0, 0.1}, {0.2, -0.1}, {0.1, 0.2}, {0.3, 0.4}});
+  };
+  auto dy_fn = [this](const complex64& x) {
+    return x + CRV({{-2, 2}, {-3, 3}, {1, -4}});
+  };
+  auto dx_fn = [this](const complex64& x, const complex64& dy) {
+    return dy / conjugate(one_ - x * x);
+  };
+  TestCWiseGrad<complex64>(ATANH, x_fn, dy_fn, dx_fn);
 }
 
 TEST_F(CWiseUnaryGradTest, Sigmoid) {
@@ -547,7 +684,7 @@ class CWiseUnaryComplexGradTest : public ::testing::Test {
   CWiseUnaryComplexGradTest()
       : scope_(Scope::NewRootScope().WithDevice("/cpu:0")) {}
 
-  enum UnaryOpType { REAL, IMAG, CONJ };
+  enum UnaryOpType { REAL, IMAG, ANGLE, CONJ };
 
   void TestCWiseGradComplex(UnaryOpType op_type, const Tensor& x,
                             const Tensor& dy, const Tensor& dx_expected) {
@@ -558,6 +695,9 @@ class CWiseUnaryComplexGradTest : public ::testing::Test {
         break;
       case IMAG:
         y = Imag(scope_, x);
+        break;
+      case ANGLE:
+        y = Angle(scope_, x);
         break;
       case CONJ:
         y = Conj(scope_, x);
@@ -593,6 +733,17 @@ TEST_F(CWiseUnaryComplexGradTest, Imag) {
   TestCWiseGradComplex(IMAG, x, dy, dx_expected);
 }
 
+TEST_F(CWiseUnaryComplexGradTest, Angle) {
+  Tensor x = test::AsTensor<complex64>(
+      {{1, -1}, {-2, 2}, {3, -3}, {-4, 4}, {8, -8}, {-9, 9}}, {2, 3});
+  Tensor dy = test::AsTensor<float>({11, -12, 13, -14, 15, -16}, {2, 3});
+  Tensor dx_expected = test::AsTensor<complex64>(
+      {{5.5, 5.5}, {3, 3},
+       {2.1666666666666665, 2.1666666666666665}, {1.75, 1.75},
+       {0.9375, 0.9375}, {0.8888888888888888, 0.8888888888888888}}, {2, 3});
+  TestCWiseGradComplex(ANGLE, x, dy, dx_expected);
+}
+
 TEST_F(CWiseUnaryComplexGradTest, Conj) {
   Tensor x = test::AsTensor<complex64>(
       {{1, -1}, {-2, 2}, {3, -3}, {-4, 4}, {8, -8}, {-9, 9}}, {2, 3});
@@ -601,108 +752,6 @@ TEST_F(CWiseUnaryComplexGradTest, Conj) {
   Tensor dx_expected = test::AsTensor<complex64>(
       {{1, 1}, {-2, -2}, {3, 3}, {-4, -4}, {8, 8}, {-9, -9}}, {2, 3});
   TestCWiseGradComplex(CONJ, x, dy, dx_expected);
-}
-
-class BinaryGradFunctionTest : public ::testing::Test {
- protected:
-  using TheDataType = float;
-  using CalcExpectedGradient = std::function<TheDataType(
-      const TheDataType x, const TheDataType y, const TheDataType df)>;
-  using CreateFunctionToTest =
-      std::function<Output(const Scope& scope, const Input& x, const Input& y)>;
-
-  void TestGradient(const CreateFunctionToTest& get_function_to_test,
-                    const CalcExpectedGradient& calc_df_dx,
-                    const CalcExpectedGradient& calc_df_dy) {
-    const Scope scope(Scope::NewRootScope().WithDevice("/cpu:0"));
-    const TensorShape tensor_shape(
-        {GetRandForSizes(), GetRandForSizes(), GetRandForSizes()});
-    const Output x = Const(scope, GetRandTensor(tensor_shape));
-    const Output y = Const(scope, GetRandTensor(tensor_shape));
-    const Output df = Const(scope, GetRandTensor(tensor_shape));
-    const Output expected_df_dx = Const(
-        scope, GetExpectedGradient(scope, tensor_shape, x, y, df, calc_df_dx));
-    const Output expected_df_dy = Const(
-        scope, GetExpectedGradient(scope, tensor_shape, x, y, df, calc_df_dy));
-    const Output f = get_function_to_test(scope, x, y);
-
-    // All data & info have been collected => run test itself:
-
-    std::vector<Output> actual_gradients;
-    TF_ASSERT_OK(test::CallGradFunction(scope, Operation(f.node()), {df},
-                                        &actual_gradients));
-
-    auto check = [&scope](const Output& actual_gradient,
-                          const Output& expected_gradient) {
-      Tensor actual;
-      Tensor expected;
-      test::GetTensor(scope, actual_gradient, &actual);
-      test::GetTensor(scope, expected_gradient, &expected);
-      test::ExpectClose(actual, expected);
-    };
-
-    check(actual_gradients[0], expected_df_dx);
-    check(actual_gradients[1], expected_df_dy);
-  }
-
-  static Tensor GetExpectedGradient(
-      const Scope& scope, const TensorShape& tensor_shape,
-      const Output& x_output, const Output& y_output, const Output& df_output,
-      const CalcExpectedGradient& calc_expected_gradient) {
-    Tensor x_tensor;
-    Tensor y_tensor;
-    Tensor df_tensor;
-    test::GetTensor(scope, x_output, &x_tensor);
-    test::GetTensor(scope, y_output, &y_tensor);
-    test::GetTensor(scope, df_output, &df_tensor);
-
-    Tensor result(DataTypeToEnum<TheDataType>::v(), tensor_shape);
-    for (int64 i = 0; i < tensor_shape.num_elements(); ++i) {
-      TheDataType& r = result.flat<TheDataType>()(i);
-      const TheDataType x = x_tensor.flat<TheDataType>()(i);
-      const TheDataType y = y_tensor.flat<TheDataType>()(i);
-      const TheDataType df = df_tensor.flat<TheDataType>()(i);
-      r = calc_expected_gradient(x, y, df);
-    }
-
-    return result;
-  }
-
-  static Tensor GetRandTensor(const TensorShape& tensor_shape) {
-    Tensor result(DataTypeToEnum<TheDataType>::v(), tensor_shape);
-    test::FillFn<TheDataType>(&result, [](const int) {
-      return static_cast<TheDataType>(GetRandForValues());
-    });
-    // LOG(INFO) << "Rand Tensor: " << result.flat<TheDataType>();
-    return result;
-  }
-
-  static TheDataType GetRandForValues() {
-    // Range: [-50.; +50.]
-    return static_cast<int64>(random::New64() % 100) - 50;
-  }
-  static int GetRandForSizes() {
-    // Range: [2; 7]
-    return 2 + (random::New64() % 5);
-    // return 1 + (random::New64() % 2);
-  }
-};
-
-TEST_F(BinaryGradFunctionTest, SquaredDifference) {
-  auto get_function_to_test = [](const Scope& scope, const Input& x,
-                                 const Input& y) {
-    return SquaredDifference(scope, x, y);
-  };
-  auto calc_df_dx = [](const TheDataType x, const TheDataType y,
-                       const TheDataType df) {
-    return static_cast<TheDataType>(2) * (x - y) * df;
-  };
-
-  auto calc_df_dy = [](const TheDataType x, const TheDataType y,
-                       const TheDataType df) {
-    return static_cast<TheDataType>(-2) * (x - y) * df;
-  };
-  TestGradient(get_function_to_test, calc_df_dx, calc_df_dy);
 }
 
 class MathGradTest : public ::testing::Test {
@@ -861,6 +910,87 @@ TEST_F(MathGradTest, BatchMatMulGrad_TransposeY) {
 
 TEST_F(MathGradTest, BatchMatMulGrad_TransposeX_TransposeY) {
   TestMatMulGrad(true, true, true);
+}
+
+class NaryGradTest : public ::testing::Test {
+ protected:
+  NaryGradTest() : scope_(Scope::NewRootScope().WithDevice("/cpu:0")) {}
+
+  void RunTest(const OutputList& xs, const std::vector<TensorShape>& x_shapes,
+               const OutputList& ys, const std::vector<TensorShape>& y_shapes) {
+    TF_ASSERT_OK(scope_.status());
+    float max_error;
+    TF_ASSERT_OK(
+        ComputeGradientError(scope_, xs, x_shapes, ys, y_shapes, &max_error));
+    EXPECT_LT(max_error, 1e-3);
+  }
+
+  Scope scope_;
+};
+
+TEST_F(NaryGradTest, AddN) {
+  TensorShape shape({3, 2, 5});
+  std::vector<Output> xs;
+  xs.push_back(Placeholder(scope_, DT_FLOAT, Placeholder::Shape(shape)));
+  xs.push_back(Placeholder(scope_, DT_FLOAT, Placeholder::Shape(shape)));
+  xs.push_back(Placeholder(scope_, DT_FLOAT, Placeholder::Shape(shape)));
+  auto y = AddN(scope_, xs);
+  RunTest(xs, {shape, shape, shape}, {y}, {shape});
+}
+
+TEST_F(NaryGradTest, Add) {
+  TensorShape x1_shape({3, 2, 5});
+  TensorShape x2_shape({2, 5});
+  auto x1 = Placeholder(scope_, DT_FLOAT, Placeholder::Shape(x1_shape));
+  auto x2 = Placeholder(scope_, DT_FLOAT, Placeholder::Shape(x2_shape));
+  auto y = Add(scope_, x1, x2);
+  RunTest({x1, x2}, {x1_shape, x2_shape}, {y}, {x1_shape});
+}
+
+TEST_F(NaryGradTest, Sub) {
+  TensorShape x1_shape({3, 2, 5});
+  TensorShape x2_shape({2, 5});
+  auto x1 = Placeholder(scope_, DT_FLOAT, Placeholder::Shape(x1_shape));
+  auto x2 = Placeholder(scope_, DT_FLOAT, Placeholder::Shape(x2_shape));
+  auto y = Sub(scope_, x1, x2);
+  RunTest({x1, x2}, {x1_shape, x2_shape}, {y}, {x1_shape});
+}
+
+TEST_F(NaryGradTest, Mul) {
+  TensorShape x1_shape({3, 2, 5});
+  TensorShape x2_shape({2, 5});
+  auto x1 = Placeholder(scope_, DT_FLOAT, Placeholder::Shape(x1_shape));
+  auto x2 = Placeholder(scope_, DT_FLOAT, Placeholder::Shape(x2_shape));
+  auto y = Mul(scope_, x1, x2);
+  RunTest({x1, x2}, {x1_shape, x2_shape}, {y}, {x1_shape});
+}
+
+TEST_F(NaryGradTest, Div) {
+  TensorShape x_shape({3, 2, 5});
+  auto x = Placeholder(scope_, DT_FLOAT, Placeholder::Shape(x_shape));
+  // Test x / (1 + |x|) rather than x_1 / x_2 to avoid triggering large
+  // division errors in the numeric estimator used by the gradient checker.
+  auto y = Div(scope_, x, Add(scope_, Const<float>(scope_, 1), Abs(scope_, x)));
+  RunTest({x}, {x_shape}, {y}, {x_shape});
+}
+
+TEST_F(NaryGradTest, RealDiv) {
+  TensorShape x_shape({3, 2, 5});
+  auto x = Placeholder(scope_, DT_FLOAT, Placeholder::Shape(x_shape));
+  // Test x / (1 + |x|) rather than x_1 / x_2 to avoid triggering large
+  // division errors in the numeric estimator used by the gradient checker.
+  auto y =
+      RealDiv(scope_, x, Add(scope_, Const<float>(scope_, 1), Abs(scope_, x)));
+  RunTest({x}, {x_shape}, {y}, {x_shape});
+}
+
+TEST_F(NaryGradTest, SquaredDifference) {
+  TensorShape x1_shape({3, 2, 5});
+  TensorShape x2_shape({2, 5});
+  auto x1 = Placeholder(scope_, DT_FLOAT, Placeholder::Shape(x1_shape));
+  auto x2 = Placeholder(scope_, DT_FLOAT, Placeholder::Shape(x2_shape));
+  auto y = SquaredDifference(scope_, x1, x2);
+  RunTest({x1, x2}, {x1_shape, x2_shape}, {y}, {x1_shape});
 }
 
 }  // namespace

@@ -90,8 +90,8 @@ Status CapturedFunction::Create(
       flib_def.get(), {} /* TODO(mrry): OptimizerOptions? */));
 
   FunctionLibraryRuntime::Handle f_handle;
-  TF_RETURN_IF_ERROR(lib->Instantiate(func->name(),
-                                      func->attr(), &f_handle));
+  TF_RETURN_IF_ERROR(
+      lib->Instantiate(func->name(), AttrSlice(&func->attr()), &f_handle));
 
   out_function->reset(new CapturedFunction(
       std::move(device), std::move(flib_def), std::move(lib), f_handle,
@@ -101,7 +101,8 @@ Status CapturedFunction::Create(
 
 Status CapturedFunction::Run(FunctionLibraryRuntime::Options f_opts,
                              gtl::ArraySlice<Tensor> args,
-                             std::vector<Tensor>* rets) {
+                             std::vector<Tensor>* rets, const string& prefix) {
+  port::Tracing::TraceMe activity(strings::StrCat(prefix, "::Run"));
   Notification n;
   Status s;
   auto done_callback = [&n, &s](Status func_status) {

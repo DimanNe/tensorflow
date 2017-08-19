@@ -117,6 +117,7 @@ typedef enum TF_DataType {
   TF_COMPLEX128 = 18,  // Double-precision complex
   TF_HALF = 19,
   TF_RESOURCE = 20,
+  TF_VARIANT = 21,
 } TF_DataType;
 
 // TF_DataTypeSize returns the sizeof() for the underlying type corresponding
@@ -359,9 +360,9 @@ typedef struct TF_Output {
 // Sets the shape of the Tensor referenced by `output` in `graph` to
 // the shape described by `dims` and `num_dims`.
 //
-// If the number of dimensions is unknown, `num_dims` must be
-// set to -1 and dims can be null. If a dimension is unknown,
-// the corresponding entry in the `dims` array must be -1.
+// If the number of dimensions is unknown, `num_dims` must be set to
+// -1 and `dims` can be null. If a dimension is unknown, the
+// corresponding entry in the `dims` array must be -1.
 //
 // This does not overwrite the existing shape associated with `output`,
 // but merges the input shape with the existing shape.  For example,
@@ -1101,8 +1102,7 @@ TF_CAPI_EXPORT extern void TF_SessionRun(
 // needed.
 //
 // On failure, out_status contains a tensorflow::Status with an error
-// message.
-// NOTE: This is EXPERIMENTAL and subject to change.
+// message. *handle is set to nullptr.
 TF_CAPI_EXPORT extern void TF_SessionPRunSetup(
     TF_Session*,
     // Input names
@@ -1118,7 +1118,6 @@ TF_CAPI_EXPORT extern void TF_SessionPRunSetup(
 
 // Continue to run the graph with additional feeds and fetches. The
 // execution state is uniquely identified by the handle.
-// NOTE: This is EXPERIMENTAL and subject to change.
 TF_CAPI_EXPORT extern void TF_SessionPRun(
     TF_Session*, const char* handle,
     // Input tensors
@@ -1182,6 +1181,55 @@ TF_CAPI_EXPORT extern void TF_PRun(TF_DeprecatedSession*, const char* handle,
                                    TF_Tensor** outputs, int noutputs,
                                    const char** target_oper_names, int ntargets,
                                    TF_Status*);
+
+typedef struct TF_DeviceList TF_DeviceList;
+
+// Lists all devices in a TF_Session.
+//
+// Caller takes ownership of the returned TF_DeviceList* which must eventually
+// be freed with a call to TF_DeleteDeviceList.
+TF_CAPI_EXPORT extern TF_DeviceList* TF_SessionListDevices(TF_Session* session,
+                                                           TF_Status* status);
+
+// Lists all devices in a TF_Session.
+//
+// Caller takes ownership of the returned TF_DeviceList* which must eventually
+// be freed with a call to TF_DeleteDeviceList.
+TF_CAPI_EXPORT extern TF_DeviceList* TF_DeprecatedSessionListDevices(
+    TF_DeprecatedSession* session, TF_Status* status);
+
+// Deallocates the device list.
+TF_CAPI_EXPORT extern void TF_DeleteDeviceList(TF_DeviceList* list);
+
+// Counts the number of elements in the device list.
+TF_CAPI_EXPORT extern int TF_DeviceListCount(const TF_DeviceList* list);
+
+// Retrieves the full name of the device (e.g. /job:worker/replica:0/...)
+// The return value will be a pointer to a null terminated string. The caller
+// must not modify or delete the string. It will be deallocated upon a call to
+// TF_DeleteDeviceList.
+//
+// If index is out of bounds, an error code will be set in the status object,
+// and a null pointer will be returned.
+TF_CAPI_EXPORT extern const char* TF_DeviceListName(const TF_DeviceList* list,
+                                                    int index, TF_Status*);
+
+// Retrieves the type of the device at the given index.
+//
+// The caller must not modify or delete the string. It will be deallocated upon
+// a call to TF_DeleteDeviceList.
+//
+// If index is out of bounds, an error code will be set in the status object,
+// and a null pointer will be returned.
+TF_CAPI_EXPORT extern const char* TF_DeviceListType(const TF_DeviceList* list,
+                                                    int index, TF_Status*);
+
+// Retrieve the amount of memory associated with a given device.
+//
+// If index is out of bounds, an error code will be set in the status object,
+// and -1 will be returned.
+TF_CAPI_EXPORT extern int64_t TF_DeviceListMemoryBytes(
+    const TF_DeviceList* list, int index, TF_Status*);
 
 // --------------------------------------------------------------------------
 // Load plugins containing custom ops and kernels

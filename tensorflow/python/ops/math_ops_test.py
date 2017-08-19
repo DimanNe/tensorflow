@@ -134,6 +134,11 @@ class LogSumExpTest(test_util.TensorFlowTestCase):
         y_np = log(np.sum(exp(x_np - max_np))) + max_np
         self.assertAllClose(y_tf_np, y_np)
 
+  def testInfinity(self):
+    with self.test_session(use_gpu=True):
+      res = math_ops.reduce_logsumexp(-np.inf).eval()
+      self.assertEqual(-np.inf, res)
+
 
 class RoundTest(test_util.TensorFlowTestCase):
 
@@ -312,6 +317,20 @@ class AddNTest(test_util.TensorFlowTestCase):
         self.assertAllEqual(x[0] * num_inputs,
                             math_ops.add_n([tf_x[0]] * num_inputs).eval())
 
+  def testGrad(self):
+    np.random.seed(42)
+    for num_inputs in range(1, 10):
+      with self.test_session(use_gpu=True) as sess:
+        input_vars = [
+            variables.Variable(10.0 * np.random.random())
+            for i in range(0, num_inputs)
+        ]
+        addn = math_ops.add_n(input_vars)
+        sess.run(variables.global_variables_initializer())
+        add_n_grad = gradients.gradients(addn, input_vars)
+        self.assertAllEqual(np.repeat(1.0, num_inputs), # d/dx (x + y + ...) = 1
+                            [g.eval() for g in add_n_grad])
+
 
 class DivAndModTest(test_util.TensorFlowTestCase):
   # TODO(aselle): Test more types before exposing new division operators.
@@ -413,9 +432,9 @@ class DivAndModTest(test_util.TensorFlowTestCase):
       tf_divs = array_ops.constant(divs)
       tf2_result = (tf_nums // tf_divs * tf_divs + tf_nums % tf_divs).eval()
       np_result = (nums // divs) * divs + (nums % divs)
-      # consistentcy with numpy
+      # Consistent with numpy
       self.assertAllEqual(tf_result, np_result)
-      # consistentcy with two forms of divide
+      # Consistent with two forms of divide
       self.assertAllEqual(tf_result, tf2_result)
       # consistency for truncation form
       tf3_result = (math_ops.truncatediv(nums, divs) * divs +
