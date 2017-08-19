@@ -62,9 +62,9 @@ int main() {
     const tf::Output x     = to::Placeholder(s.WithOpName("xInput"), tf::DT_DOUBLE, to::Placeholder::Attrs().Shape({-1, 2}));
     const tf::Output Expec = to::Placeholder(s.WithOpName("ExpVal"), tf::DT_DOUBLE, to::Placeholder::Attrs().Shape({-1, 1}));
     // const tf::Output Model = CreateMLP(s, InitV, x);
-    tf::Output        Weights;
-    const tf::Output  Model = CreateMLP(s, InitV, x, Weights);
-    const tf::Output  Loss  = AddLossFunction(s, Model, Expec);
+    tf::Output       Weights;
+    const tf::Output Model = CreateMLP(s, InitV, x, Weights);
+    const tf::Output Loss  = AddLossFunction(s, Model, Expec);
 
     tf::ClientSession Session(s);
     InitV(Session, s);
@@ -81,30 +81,19 @@ int main() {
     };
     // clang-format on
 
-    const tf::Output LearningRate = to::Const(s.WithOpName("learning_rate"), 0.1);
-    tf::Tensor NumericGradients;
+    const tf::Output ApplySGD =
+        to::ApplyGradientDescent(s, Weights, to::Const(s.WithOpName("learning_rate"), 0.1), dLossdWeights.front());
 
 
     for(tf::uint32 i = 0; i < 10; ++i) {
         {
             std::vector<tf::Tensor> Outputs;
-            tf::OutputList NodesOfInterest;
-            NodesOfInterest.push_back(Model);
-            NodesOfInterest.push_back(Loss);
-            NodesOfInterest.insert(NodesOfInterest.end(), dLossdWeights.begin(), dLossdWeights.end());
-            TF_CHECK_OK(Session.Run(Feed, NodesOfInterest, &Outputs));
+            TF_CHECK_OK(Session.Run(Feed, {Model, Loss}, &Outputs));
             LOG(INFO) << "Prediction: " << Outputs[0].matrix<double>() << ", Loss: " << Outputs[1].matrix<double>();
-            // LOG(INFO) << "Gradients:  " << Outputs[2].matrix<double>();
-
-            NumericGradients = Outputs[2];
         }
         {
-            const tf::Input Delta(NumericGradients);
-            const tf::Output ApplySGD = to::ApplyGradientDescent(s, Weights, LearningRate, Delta);
             std::vector<tf::Tensor> Outputs;
-            TF_CHECK_OK(Session.Run({ApplySGD}, &Outputs));
-            // LOG(INFO) << "New Value of Weights: " << Outputs[0].DebugString();
-            //std::cout << std::endl;
+            TF_CHECK_OK(Session.Run(Feed, {ApplySGD}, &Outputs));
         }
     }
 
