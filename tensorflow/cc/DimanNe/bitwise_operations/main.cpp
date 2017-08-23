@@ -12,38 +12,28 @@ tf::Output AddLayer(tf::Scope                  s,
                     const tf::int64            NumOfInputs,
                     const tf::int64            LayerWidth,
                     const tf::Output &         PrevOutput,
-                    tf::Output *               Weights) {
+                    tf::OutputList &           Weights) {
     using TRand = to::ParameterizedTruncatedNormal;
 
-    // tf::Output b = InitV.Create<TRand>(s.WithOpName("b"), {1, LayerWidth}, tf::DT_DOUBLE, {}, 1., 1., 0., 3.);
-    tf::Output W = InitV.Create<TRand>(s.WithOpName("W"), {NumOfInputs, LayerWidth}, tf::DT_DOUBLE, {}, 1., 2., -2., 3.);
-    if(Weights)
-        *Weights = W;
+    tf::Output b = InitV.Create<TRand>(s.WithOpName("b"), {1, LayerWidth}, tf::DT_DOUBLE, {}, 1., 1., 0., 3.);
+    Weights.push_back(b);
+
+    tf::Output W = InitV.Create<TRand>(s.WithOpName("W"), {NumOfInputs, LayerWidth}, tf::DT_DOUBLE, {}, 1., 2., 0., 3.);
+    Weights.push_back(W);
 
     tf::Output xW = to::MatMul(s, PrevOutput, W);
-    // tf::Output xWb   = to::Add(s, xW, b);
-    // tf::Output Layer = to::Relu(s, xW);
-    return xW;
+    tf::Output xWb   = to::Add(s, xW, b);
+    tf::Output Layer = to::Relu(s, xWb);
+    return Layer;
 }
 
-// tf::Output CreateMLP(tf::Scope &s, tfu::TVariableInitializer &InitV, const tf::Output &x) {
-//     const tf::PartialTensorShape ShapeOfInput    = tfu::GetShapeOfOutput(x);
-//     const tf::int64              NumOfElemInItem = ShapeOfInput.dim_sizes().back();
-//
-//     tf::Output Result = x;
-//     Result            = AddLayer(s.WithOpName("Layer1"), InitV, NumOfElemInItem, 3, Result);
-//     Result            = AddLayer(s.WithOpName("Layer2"), InitV, 3, 1, Result);
-//
-//     return Result;
-// }
-
-
-tf::Output CreateMLP(tf::Scope &s, tfu::TVariableInitializer &InitV, const tf::Output &x, tf::Output &Weights) {
+tf::Output CreateMLP(tf::Scope &s, tfu::TVariableInitializer &InitV, const tf::Output &x, tf::OutputList &Weights) {
     const tf::PartialTensorShape ShapeOfInput    = tfu::GetShapeOfOutput(x);
     const tf::int64              NumOfElemInItem = ShapeOfInput.dim_sizes().back();
 
     tf::Output Result = x;
-    Result            = AddLayer(s.WithOpName("Layer1"), InitV, NumOfElemInItem, 1, Result, &Weights);
+    Result            = AddLayer(s.WithOpName("Layer1"), InitV, NumOfElemInItem, 3, Result, Weights);
+    Result            = AddLayer(s.WithOpName("Layer2"), InitV, 3, 1, Result, Weights);
 
     return Result;
 }
@@ -61,8 +51,8 @@ int main() {
 
     const tf::Output x     = to::Placeholder(s.WithOpName("xInput"), tf::DT_DOUBLE, to::Placeholder::Attrs().Shape({-1, 2}));
     const tf::Output Expec = to::Placeholder(s.WithOpName("ExpVal"), tf::DT_DOUBLE, to::Placeholder::Attrs().Shape({-1, 1}));
-    // const tf::Output Model = CreateMLP(s, InitV, x);
-    tf::Output       Weights;
+
+    tf::OutputList   Weights;
     const tf::Output Model = CreateMLP(s, InitV, x, Weights);
     const tf::Output Loss  = AddLossFunction(s, Model, Expec);
 
@@ -72,28 +62,38 @@ int main() {
 
     tf::Output     dLossdLoss = to::Const(s, {1.});
     tf::OutputList dLossdWeights;
-    TF_CHECK_OK(tf::AddSymbolicGradients(s, {Loss}, {Weights}, {dLossdLoss}, &dLossdWeights));
+    TF_CHECK_OK(tf::AddSymbolicGradients(s, {Loss}, Weights, {dLossdLoss}, &dLossdWeights));
+    assert(dLossdWeights.size() == Weights.size());
 
     // clang-format off
     tf::ClientSession::FeedType Feed = {
-        { x,     {{1., 1.}/*, {0.01, 0.01}*/}     },
-        { Expec, {{1.}                      }     }
+        { x,     {{1., 1.}/*, {2., 2.}*/ }  },
+        { Expec, {{1.}    /*, {2.}    */ }  }
     };
     // clang-format on
 
-    const tf::Output ApplySGD =
-        to::ApplyGradientDescent(s, Weights, to::Const(s.WithOpName("learning_rate"), 0.1), dLossdWeights.front());
+    tf::OutputList ApplySGDs;
+    for(size_t i = 0; i < Weights.size(); ++i) {
+        tf::Output ApplySGD =
+            to::ApplyGradientDescent(s, Weights[i], to::Const(s.WithOpName("learning_rate"), 0.005), dLossdWeights[i]);
+        ApplySGDs.push_back(ApplySGD);
+    }
+
 
 
     for(tf::uint32 i = 0; i < 10; ++i) {
         {
             std::vector<tf::Tensor> Outputs;
-            TF_CHECK_OK(Session.Run(Feed, {Model, Loss}, &Outputs));
+            tf::OutputList          NodesWeAreInterestedIn = {Model, Loss};
+            NodesWeAreInterestedIn.insert(NodesWeAreInterestedIn.end(), Weights.begin(), Weights.end());
+            TF_CHECK_OK(Session.Run(Feed, NodesWeAreInterestedIn, &Outputs));
             LOG(INFO) << "Prediction: " << Outputs[0].matrix<double>() << ", Loss: " << Outputs[1].matrix<double>();
+            for(size_t i = 2; i < NodesWeAreInterestedIn.size(); ++i)
+                LOG(INFO) << "Value of Weights " << i - 2 << " Before SGD: " << Outputs[i].DebugString();
         }
         {
             std::vector<tf::Tensor> Outputs;
-            TF_CHECK_OK(Session.Run(Feed, {ApplySGD}, &Outputs));
+            TF_CHECK_OK(Session.Run(Feed, ApplySGDs, &Outputs));
         }
     }
 
